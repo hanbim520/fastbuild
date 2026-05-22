@@ -7,13 +7,17 @@
 
 // FBuildCore
 #include "Tools/FBuild/FBuildCore/FLog.h"
+#include "Tools/FBuild/FBuildCore/Protocol/Protocol.h"
 
 // Core
 #include "Core/Env/Env.h"
 #include "Core/FileIO/FileIO.h"
 #include "Core/FileIO/PathUtils.h"
 #include "Core/Network/Network.h"
+#include "Core/Network/TCPConnectionPool.h"
+#include "Core/Process/Thread.h"
 #include "Core/Profile/Profile.h"
+#include "Core/Time/Timer.h"
 
 // CONSTRUCTOR
 //------------------------------------------------------------------------------
@@ -46,9 +50,64 @@ void WorkerBrokerageClient::FindWorkers( Array<AString> & outWorkerList )
 
     // Init the brokerage
     InitBrokerage();
+    if ( m_BrokerageRoots.IsEmpty() && ( IsCoordinatorConfigured() == false ) )
+    {
+        FLOG_WARN( "No brokerage root or coordinator; did you set FASTBUILD_BROKERAGE_PATH or FASTBUILD_COORDINATOR?" );
+        return;
+    }
+
+    // Try coordinator first, falling back to brokerage folders if configured.
+    if ( ConnectToCoordinator() )
+    {
+        m_WorkerListUpdate.Clear();
+        m_WorkerListUpdateReady = false;
+
+        Protocol::MsgRequestWorkerList msg;
+        msg.Send( m_Connection );
+
+        Timer timer;
+        while ( ( m_WorkerListUpdateReady == false ) &&
+                ( timer.GetElapsedMS() < 5000.0f ) )
+        {
+            Thread::Sleep( 1 );
+        }
+
+        DisconnectFromCoordinator();
+
+        if ( m_WorkerListUpdateReady == false )
+        {
+            FLOG_WARN( "Timed out waiting for worker list from FASTBuild coordinator" );
+        }
+        else
+        {
+            if ( ( outWorkerList.GetSize() + m_WorkerListUpdate.GetSize() ) > outWorkerList.GetCapacity() )
+            {
+                outWorkerList.SetCapacity( outWorkerList.GetSize() + m_WorkerListUpdate.GetSize() );
+            }
+
+            StackArray<AString> localAddresses;
+            Network::GetIPv4Addresses( localAddresses );
+
+            for ( const uint32_t workerAddress : m_WorkerListUpdate )
+            {
+                AStackString workerName;
+                TCPConnectionPool::GetAddressAsString( workerAddress, workerName );
+                if ( localAddresses.Find( workerName ) == nullptr )
+                {
+                    outWorkerList.Append( workerName );
+                }
+            }
+
+            m_WorkerListUpdate.Clear();
+            if ( outWorkerList.IsEmpty() == false )
+            {
+                return;
+            }
+        }
+    }
+
     if ( m_BrokerageRoots.IsEmpty() )
     {
-        FLOG_WARN( "No brokerage root; did you set FASTBUILD_BROKERAGE_PATH?" );
         return;
     }
 

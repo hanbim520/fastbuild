@@ -35,7 +35,7 @@ Compiler( 'Compiler-Clang8' )
                                     + ' -m64'           // x86_64
                                     + ' -D__OSX__'      // Platform define
                                     + ' -D__APPLE__'    // Platform define
-                                    + ' -mmacosx-version-min=10.7'
+                                    + ' -mmacosx-version-min=10.14'
                                     + ' -stdlib=libc++'
 
                                     // Include paths
@@ -65,10 +65,10 @@ Compiler( 'Compiler-Clang8' )
 
     // Linker
     .Linker                         = '$Clang8_BasePath$/clang++'
-    .LinkerOptions                  = '"%1" -o "%2" -g'
+    .LinkerOptions                  = '"%1" -framework Cocoa -o "%2" -g'
                                     + ' -Wl,-fatal_warnings'
                                     + ' -Wl,-dead_strip'
-                                    + ' -mmacosx-version-min=10.13'
+                                    + ' -mmacosx-version-min=10.14'
                                     + ' -stdlib=libc++'
 
     // File Extensions

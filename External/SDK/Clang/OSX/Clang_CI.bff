@@ -32,6 +32,7 @@ Compiler( 'Compiler-Clang12' )
                                     + ' -g'             // Generate debug info
                                     + ' -D__OSX__'      // Platform define
                                     + ' -D__APPLE__'    // Platform define
+                                    + ' -mmacosx-version-min=10.14'
 
                                     // Include paths
                                     + ' -I./'
@@ -60,7 +61,7 @@ Compiler( 'Compiler-Clang12' )
 
     // Linker
     .Linker                         = 'CLANGXX_BINARY'
-    .LinkerOptions                  = '"%1" -o "%2" -g'
+    .LinkerOptions                  = '"%1" -framework Cocoa -o "%2" -g'
                                     + ' -Wl,-fatal_warnings'
                                     + ' -Wl,-dead_strip'
 
@@ -75,10 +76,10 @@ Compiler( 'Compiler-Clang12' )
 
     // Intel 64-bit
     .Platform                       = 'x64OSX'
-    .CompilerOptions                + ' -arch x86_64 -mmacosx-version-min=10.13'
-    .CompilerOptionsC               + ' -arch x86_64 -mmacosx-version-min=10.13'
-    .PCHOptions                     + ' -arch x86_64 -mmacosx-version-min=10.13'
-    .LinkerOptions                  + ' -arch x86_64 -mmacosx-version-min=10.13'
+    .CompilerOptions                + ' -arch x86_64 -mmacosx-version-min=10.14'
+    .CompilerOptionsC               + ' -arch x86_64 -mmacosx-version-min=10.14'
+    .PCHOptions                     + ' -arch x86_64 -mmacosx-version-min=10.14'
+    .LinkerOptions                  + ' -arch x86_64 -mmacosx-version-min=10.14'
 ]
 
 .ToolChain_Clang_ARMOSX =

@@ -147,6 +147,8 @@ protected:
     float m_LastProgressCalcTime;
     float m_SmoothedProgressCurrent;
     float m_SmoothedProgressTarget;
+    uint32_t m_MonitorProgressTotalJobs;
+    uint32_t m_MonitorProgressRemainingJobs;
 
     FBuildStats m_BuildStats;
 

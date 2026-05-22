@@ -42,6 +42,9 @@ const char * GetProtocolMessageDebugName( Protocol::MessageType msgType )
         "File",
         "JobResultCompressed",
         "ConnectionAck",
+        "RequestWorkerList",
+        "WorkerList",
+        "SetWorkerStatus",
     };
     // clang-format on
     static_assert( ( sizeof( msgNames ) / sizeof( const char * ) ) == Protocol::NUM_MESSAGES, "msgNames item count doesn't match NUM_MESSAGES" );
@@ -213,6 +216,36 @@ Protocol::MsgFile::MsgFile( uint64_t toolId, uint32_t fileId )
     , m_FileId( fileId )
     , m_ToolId( toolId )
 {
+}
+
+// MsgRequestWorkerList
+//------------------------------------------------------------------------------
+Protocol::MsgRequestWorkerList::MsgRequestWorkerList()
+    : Protocol::IMessage( Protocol::MSG_REQUEST_WORKER_LIST, sizeof( MsgRequestWorkerList ), false )
+    , m_ProtocolVersionMajor( kVersionMajor )
+    , m_ProtocolVersionMinor( kVersionMinor )
+    , m_Platform( Env::GetPlatform() )
+{
+    memset( m_Padding2, 0, sizeof( m_Padding2 ) );
+}
+
+// MsgWorkerList
+//------------------------------------------------------------------------------
+Protocol::MsgWorkerList::MsgWorkerList()
+    : Protocol::IMessage( Protocol::MSG_WORKER_LIST, sizeof( MsgWorkerList ), true )
+{
+}
+
+// MsgSetWorkerStatus
+//------------------------------------------------------------------------------
+Protocol::MsgSetWorkerStatus::MsgSetWorkerStatus( bool isAvailable )
+    : Protocol::IMessage( Protocol::MSG_SET_WORKER_STATUS, sizeof( MsgSetWorkerStatus ), false )
+    , m_ProtocolVersionMajor( kVersionMajor )
+    , m_IsAvailable( isAvailable )
+    , m_ProtocolVersionMinor( kVersionMinor )
+    , m_Platform( Env::GetPlatform() )
+{
+    memset( m_Padding2, 0, sizeof( m_Padding2 ) );
 }
 
 //------------------------------------------------------------------------------

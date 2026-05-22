@@ -190,7 +190,7 @@ ObjectNode::~ObjectNode() = default;
     const bool useCache = ShouldUseCache();
     const bool useDist = IsDistributionAllowed();
     const bool useSimpleDist = GetCompiler()->SimpleDistributionMode();
-    bool usePreProcessor = !useSimpleDist && ( useCache || useDist || IsGCC() || IsSNC() || IsClang() || IsClangCl() || IsCodeWarriorWii() || IsGreenHillsWiiU() || IsVBCC() || IsOrbisWavePSSLC() );
+    bool usePreProcessor = !useSimpleDist && ( useCache || useDist || IsGCC() || IsSNC() || ( IsClang() && useDist ) || IsClangCl() || IsCodeWarriorWii() || IsGreenHillsWiiU() || IsVBCC() || IsOrbisWavePSSLC() );
     if ( GetDedicatedPreprocessor() )
     {
         usePreProcessor = true;
@@ -512,8 +512,12 @@ Node::BuildResult ObjectNode::DoBuildWithPreProcessor2( Job * job, bool useDeopt
     bool usePreProcessedOutput = true;
     if ( job->IsLocal() )
     {
-        if ( IsClang() ||
-             IsClangCl() ||
+        if ( IsClang() )
+        {
+            usePreProcessedOutput = false;
+        }
+
+        if ( IsClangCl() ||
              IsGCC() ||
              IsSNC() )
         {
@@ -1851,6 +1855,43 @@ bool ObjectNode::BuildArgs( const Job * job, Args & fullArgs, Pass pass, bool us
         if ( driver->ProcessArg_BuildTimeSubstitution( token, i, fullArgs ) )
         {
             continue;
+        }
+
+        // %5 -> First .ExtraFiles entry from the Compiler node.
+        {
+            const char * const found = token.Find( "%5" );
+            if ( found )
+            {
+                AStackString extraFile;
+                if ( job->IsLocal() == false )
+                {
+                    job->GetToolManifest()->GetRemoteFilePath( 1, extraFile );
+                }
+
+                fullArgs += AStackString( token.Get(), found );
+                fullArgs += job->IsLocal() ? GetCompiler()->GetExtraFile( 0 ) : extraFile;
+                fullArgs += AStackString( found + 2, token.GetEnd() );
+                fullArgs.AddDelimiter();
+                continue;
+            }
+        }
+
+        // Unreal's cl-filter needs a separate dependency output file when
+        // compiling preprocessed output, since MSVC /showIncludes is empty then.
+        {
+            const char * const found = token.Find( "%CLFilterDependenciesOutput" );
+            if ( found )
+            {
+                AString nameWithoutExtension( GetName() );
+                PathUtils::StripFileExtension( nameWithoutExtension );
+
+                fullArgs += AStackString( token.Get(), found );
+                fullArgs += nameWithoutExtension;
+                fullArgs += ( pass == PASS_COMPILE_PREPROCESSED ) ? ".empty" : ".txt";
+                fullArgs += AStackString( found + 27, token.GetEnd() );
+                fullArgs.AddDelimiter();
+                continue;
+            }
         }
 
         // untouched token

@@ -8,6 +8,7 @@
 // FBuildCore
 #include "Tools/FBuild/FBuildCore/FBuildVersion.h"
 #include "Tools/FBuild/FBuildCore/FLog.h"
+#include "Tools/FBuild/FBuildCore/Protocol/Protocol.h"
 #include "Tools/FBuild/FBuildWorker/Worker/WorkerSettings.h"
 
 // Core
@@ -53,7 +54,7 @@ void WorkerBrokerageServer::SetAvailability( bool available )
     InitBrokerage();
 
     // ignore if brokerage not configured
-    if ( m_BrokerageRoots.IsEmpty() )
+    if ( m_BrokerageRoots.IsEmpty() && ( IsCoordinatorConfigured() == false ) )
     {
         return;
     }
@@ -66,6 +67,25 @@ void WorkerBrokerageServer::SetAvailability( bool available )
         const float elapsedTime = m_TimerLastUpdate.GetElapsed();
         if ( elapsedTime >= sBrokerageAvailabilityUpdateTime )
         {
+            bool updatedViaCoordinator = false;
+            if ( ConnectToCoordinator() )
+            {
+                Protocol::MsgSetWorkerStatus msg( true );
+                updatedViaCoordinator = msg.Send( m_Connection );
+                DisconnectFromCoordinator();
+            }
+            if ( updatedViaCoordinator )
+            {
+                m_TimerLastUpdate.Restart();
+                m_Available = available;
+                return;
+            }
+            if ( m_BrokerageRoots.IsEmpty() )
+            {
+                m_TimerLastUpdate.Restart();
+                return;
+            }
+
             // If settings have changed, (re)create the file
             // If settings have not changed, update the modification timestamp
             const WorkerSettings & workerSettings = WorkerSettings::Get();
@@ -116,7 +136,8 @@ void WorkerBrokerageServer::SetAvailability( bool available )
             {
                 // Update the modified time
                 // (Allows an external process to delete orphaned files (from crashes/terminated workers)
-                if ( FileIO::SetFileLastWriteTimeToNow( m_BrokerageFilePath ) == false )
+                if ( !m_BrokerageRoots.IsEmpty() &&
+                     ( FileIO::SetFileLastWriteTimeToNow( m_BrokerageFilePath ) == false ) )
                 {
                     // Failed to update time - try to create or recreate the file
                     createBrokerageFile = true;
@@ -187,8 +208,18 @@ void WorkerBrokerageServer::SetAvailability( bool available )
     }
     else if ( m_Available != available )
     {
-        // remove file to remove availability
-        FileIO::FileDelete( m_BrokerageFilePath.Get() );
+        if ( ConnectToCoordinator() )
+        {
+            Protocol::MsgSetWorkerStatus msg( false );
+            msg.Send( m_Connection );
+            DisconnectFromCoordinator();
+        }
+
+        if ( !m_BrokerageRoots.IsEmpty() )
+        {
+            // remove file to remove availability
+            FileIO::FileDelete( m_BrokerageFilePath.Get() );
+        }
 
         // Restart the timer
         m_TimerLastUpdate.Restart();
@@ -196,7 +227,8 @@ void WorkerBrokerageServer::SetAvailability( bool available )
     m_Available = available;
 
     // Handle brokerage cleaning
-    if ( m_TimerLastCleanBroker.GetElapsed() >= sBrokerageElapsedTimeBetweenClean )
+    if ( !m_BrokerageRoots.IsEmpty() &&
+         ( m_TimerLastCleanBroker.GetElapsed() >= sBrokerageElapsedTimeBetweenClean ) )
     {
         const uint64_t fileTimeNow = Time::FileTimeToSeconds( Time::GetCurrentFileTime() );
 

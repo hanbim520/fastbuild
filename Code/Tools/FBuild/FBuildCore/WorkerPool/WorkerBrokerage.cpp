@@ -6,10 +6,13 @@
 #include "WorkerBrokerage.h"
 
 // FBuild
+#include "Tools/FBuild/FBuildCore/FLog.h"
 #include "Tools/FBuild/FBuildCore/Protocol/Protocol.h"
+#include "Tools/FBuild/FBuildCore/WorkerPool/WorkerConnectionPool.h"
 
 // Core
 #include "Core/Env/Env.h"
+#include "Core/Mem/Mem.h"
 #include "Core/Network/Network.h"
 #include "Core/Profile/Profile.h"
 #include "Core/Strings/AStackString.h"
@@ -17,7 +20,10 @@
 // CONSTRUCTOR
 //------------------------------------------------------------------------------
 WorkerBrokerage::WorkerBrokerage()
-    : m_BrokerageInitialized( false )
+    : m_ConnectionPool( nullptr )
+    , m_Connection( nullptr )
+    , m_WorkerListUpdateReady( false )
+    , m_BrokerageInitialized( false )
 {
 }
 
@@ -34,6 +40,15 @@ void WorkerBrokerage::InitBrokerage()
 
     // brokerage path includes version to reduce unnecessary comms attempts
     const uint32_t protocolVersion = Protocol::kVersionMajor;
+
+    if ( m_CoordinatorAddress.IsEmpty() )
+    {
+        AStackString coordinator;
+        if ( Env::GetEnvVariable( "FASTBUILD_COORDINATOR", coordinator ) )
+        {
+            m_CoordinatorAddress = coordinator;
+        }
+    }
 
     // root folder
     AStackString brokeragePath;
@@ -93,6 +108,54 @@ void WorkerBrokerage::InitBrokerage()
 
 // DESTRUCTOR
 //------------------------------------------------------------------------------
-WorkerBrokerage::~WorkerBrokerage() = default;
+WorkerBrokerage::~WorkerBrokerage()
+{
+    DisconnectFromCoordinator();
+}
+
+// UpdateWorkerList
+//------------------------------------------------------------------------------
+void WorkerBrokerage::UpdateWorkerList( Array<uint32_t> & workerListUpdate )
+{
+    m_WorkerListUpdate.Swap( workerListUpdate );
+    m_WorkerListUpdateReady = true;
+}
+
+// ConnectToCoordinator
+//------------------------------------------------------------------------------
+bool WorkerBrokerage::ConnectToCoordinator()
+{
+    if ( m_CoordinatorAddress.IsEmpty() )
+    {
+        return false;
+    }
+
+    ASSERT( m_ConnectionPool == nullptr );
+    ASSERT( m_Connection == nullptr );
+
+    m_ConnectionPool = FNEW( WorkerConnectionPool );
+    m_Connection = m_ConnectionPool->Connect( m_CoordinatorAddress, Protocol::kCoordinatorPort, 2000, this ); // 2000ms connection timeout
+    if ( m_Connection == nullptr )
+    {
+        FLOG_WARN( "Failed to connect to FASTBuild coordinator at '%s'", m_CoordinatorAddress.Get() );
+        FDELETE m_ConnectionPool;
+        m_ConnectionPool = nullptr;
+        return false;
+    }
+
+    return true;
+}
+
+// DisconnectFromCoordinator
+//------------------------------------------------------------------------------
+void WorkerBrokerage::DisconnectFromCoordinator()
+{
+    if ( m_ConnectionPool )
+    {
+        FDELETE m_ConnectionPool;
+        m_ConnectionPool = nullptr;
+        m_Connection = nullptr;
+    }
+}
 
 //------------------------------------------------------------------------------

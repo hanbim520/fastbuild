@@ -24,6 +24,10 @@
 #if defined( __WINDOWS__ )
     #include "Core/Env/WindowsHeader.h"
 #endif
+#if defined( __APPLE__ )
+    #include <limits.h>
+    #include <sys/resource.h>
+#endif
 
 // Global Data
 //------------------------------------------------------------------------------
@@ -114,6 +118,12 @@ int Main( const AString & args )
 #else
     // TODO:MAC SetErrorMode equivalent
     // TODO:LINUX SetErrorMode equivalent
+#endif
+
+    // macOS defaults can be too low for many simultaneous compiler processes.
+#if defined( __APPLE__ )
+    const struct rlimit limit = { OPEN_MAX, RLIM_INFINITY };
+    setrlimit( RLIMIT_NOFILE, &limit );
 #endif
 
     // start the worker and wait for it to be closed

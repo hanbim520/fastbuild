@@ -7,6 +7,7 @@
 
 // FBuild
 #include "Tools/FBuild/FBuildCore/FBuild.h"
+#include "Tools/FBuild/FBuildCore/FLog.h"
 #include "Tools/FBuild/FBuildCore/Graph/NodeGraph.h"
 #include "Tools/FBuild/FBuildCore/Helpers/Report/Report.h"
 
@@ -72,12 +73,20 @@ void FBuildStats::OnBuildStop( const NodeGraph & nodeGraph, Node * node )
     const FBuildOptions & options = FBuild::Get().GetOptions();
     const bool showSummary = options.m_ShowSummary && ( !options.m_NoSummaryOnError || buildOk );
     const bool generateReport = ( options.m_ReportType.IsEmpty() == false );
+    const bool outputMonitorStats = FLog::IsMonitorEnabled();
 
     // Any output required?
-    if ( showSummary || generateReport )
+    if ( showSummary || generateReport || outputMonitorStats )
     {
         // do work common to -summary and -report
         GatherPostBuildStatistics( nodeGraph, node );
+
+        if ( outputMonitorStats )
+        {
+            FLOG_MONITOR( "GRAPH FASTBuild \"Cache Hits\" Count %u\n", m_Totals.m_NumCacheHits );
+            FLOG_MONITOR( "GRAPH FASTBuild \"Cache Misses\" Count %u\n", m_Totals.m_NumCacheMisses );
+            FLOG_MONITOR( "GRAPH FASTBuild \"Cache Stores\" Count %u\n", m_Totals.m_NumCacheStores );
+        }
 
         // detailed build report
         if ( generateReport )

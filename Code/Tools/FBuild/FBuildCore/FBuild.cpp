@@ -66,6 +66,8 @@ FBuild::FBuild( const FBuildOptions & options )
     , m_LastProgressCalcTime( 0.0f )
     , m_SmoothedProgressCurrent( 0.0f )
     , m_SmoothedProgressTarget( 0.0f )
+    , m_MonitorProgressTotalJobs( 0 )
+    , m_MonitorProgressRemainingJobs( 0 )
     , m_Options( options )
     , m_EnvironmentString( nullptr )
     , m_EnvironmentStringSize( 0 )
@@ -435,6 +437,8 @@ void FBuild::SaveDependencyGraph( ChainedMemoryStream & stream, const char * nod
     m_LastProgressCalcTime = 0.0f;
     m_SmoothedProgressCurrent = 0.0f;
     m_SmoothedProgressTarget = 0.0f;
+    m_MonitorProgressTotalJobs = 0;
+    m_MonitorProgressRemainingJobs = 0;
     FLog::StartBuild();
 
     // create worker dir for main thread build case
@@ -516,20 +520,28 @@ void FBuild::SaveDependencyGraph( ChainedMemoryStream & stream, const char * nod
                 break;
             }
 
-            // Wait until more work to process or time has elapsed
-            m_JobQueue->MainThreadWait( 500 );
-
             // update progress
             UpdateBuildStatus( nodeToBuild );
+
+            // Wait until more work to process or time has elapsed
+            m_JobQueue->MainThreadWait( 500 );
         }
 
         // wrap up/free any jobs that come from the last build pass
         m_JobQueue->FinalizeCompletedJobs( *m_DependencyGraph );
 
+        if ( nodeToBuild->GetState() == Node::UP_TO_DATE )
+        {
+            m_SmoothedProgressCurrent = 100.0f;
+            m_MonitorProgressRemainingJobs = 0;
+            FLOG_MONITOR( "PROGRESS_STATUS %f %u %u \n",
+                          (double)m_SmoothedProgressCurrent,
+                          m_MonitorProgressTotalJobs,
+                          m_MonitorProgressRemainingJobs );
+        }
+
         FDELETE m_JobQueue;
         m_JobQueue = nullptr;
-
-        FLog::StopBuild();
     }
 
     if ( BuildProfiler::IsValid() )
@@ -550,7 +562,9 @@ void FBuild::SaveDependencyGraph( ChainedMemoryStream & stream, const char * nod
     const float timeTaken = m_Timer.GetElapsed();
     m_BuildStats.m_TotalBuildTime = timeTaken;
 
+    FLog::ClearProgress();
     m_BuildStats.OnBuildStop( *m_DependencyGraph, nodeToBuild );
+    FLog::StopBuild();
 
     return ( nodeToBuild->GetState() == Node::UP_TO_DATE );
 }
@@ -685,6 +699,29 @@ void FBuild::UpdateBuildStatus( const Node * node )
 
     const float timeNow = m_Timer.GetElapsed();
 
+    // get node counts
+    uint32_t numJobs = 0;
+    uint32_t numJobsActive = 0;
+    uint32_t numJobsDist = 0;
+    uint32_t numJobsDistActive = 0;
+    if ( JobQueue::IsValid() )
+    {
+        JobQueue::Get().GetJobStats( numJobs, numJobsActive, numJobsDist, numJobsDistActive );
+    }
+    const uint32_t remainingJobs = numJobs + numJobsActive;
+    if ( remainingJobs > 0 )
+    {
+        if ( m_MonitorProgressTotalJobs == 0 )
+        {
+            m_MonitorProgressTotalJobs = remainingJobs;
+            m_MonitorProgressRemainingJobs = remainingJobs;
+        }
+        else
+        {
+            m_MonitorProgressRemainingJobs = Math::Min( remainingJobs, m_MonitorProgressRemainingJobs );
+        }
+    }
+
     const bool doUpdate = ( ( timeNow - m_LastProgressOutputTime ) >= OUTPUT_FREQUENCY );
     if ( doUpdate == false )
     {
@@ -714,22 +751,15 @@ void FBuild::UpdateBuildStatus( const Node * node )
 
     m_SmoothedProgressCurrent = ( 0.5f * m_SmoothedProgressCurrent ) + ( m_SmoothedProgressTarget * 0.5f );
 
-    // get node counts
-    uint32_t numJobs = 0;
-    uint32_t numJobsActive = 0;
-    uint32_t numJobsDist = 0;
-    uint32_t numJobsDistActive = 0;
-    if ( JobQueue::IsValid() )
-    {
-        JobQueue::Get().GetJobStats( numJobs, numJobsActive, numJobsDist, numJobsDistActive );
-    }
-
     if ( FBuild::Get().GetOptions().m_ShowProgress )
     {
         FLog::OutputProgress( timeNow, m_SmoothedProgressCurrent, numJobs, numJobsActive, numJobsDist, numJobsDistActive );
     }
 
-    FLOG_MONITOR( "PROGRESS_STATUS %f \n", (double)m_SmoothedProgressCurrent );
+    FLOG_MONITOR( "PROGRESS_STATUS %f %u %u \n",
+                  (double)m_SmoothedProgressCurrent,
+                  m_MonitorProgressTotalJobs,
+                  m_MonitorProgressRemainingJobs );
 
     m_LastProgressOutputTime = timeNow;
 }

@@ -83,12 +83,18 @@ Compiler( 'Compiler-VS2022-x64' )
                     '$Root$/tbbmalloc.dll' // Required as of 16.2 (14.22.27905)
                     '$Root$/vcruntime140.dll'
                     '$Root$/vcruntime140_1.dll' // Required as of 16.5.1 (14.25.28610)
-                    '$Root$/1033/clui.dll'
-                    '$Root$/1033/mspft140ui.dll' // Localized messages for static analysis
                   }
                 #if MSVC_DYNAMIC_DEOPT_AVAILABLE
                     + '$Root$/c2dd.dll' // Dynamic Deoptimization as of 17.14.0 (14.44.34918)
                 #endif
+    #if file_exists( "$Root$/1033/clui.dll" )
+        .ExtraFiles + { '$Root$/1033/clui.dll'
+                        '$Root$/1033/mspft140ui.dll' } // Localized messages for static analysis
+    #endif
+    #if file_exists( "$Root$/2052/clui.dll" )
+        .ExtraFiles + { '$Root$/2052/clui.dll'
+                        '$Root$/2052/mspft140ui.dll' } // Localized messages for static analysis
+    #endif
 
     #if ENABLE_LIGHT_CACHE
         .UseLightCache_Experimental = true
@@ -114,9 +120,15 @@ Compiler( 'Compiler-VS2022-ARM64' )
                     '$Root$/tbbmalloc.dll' // Required as of 16.2 (14.22.27905)
                     '$Root$/vcruntime140.dll'
                     '$Root$/vcruntime140_1.dll' // Required as of 16.5.1 (14.25.28610)
-                    '$Root$/1033/clui.dll'
-                    '$Root$/1033/mspft140ui.dll' // Localized messages for static analysis
                   }
+    #if file_exists( "$Root$/1033/clui.dll" )
+        .ExtraFiles + { '$Root$/1033/clui.dll'
+                        '$Root$/1033/mspft140ui.dll' } // Localized messages for static analysis
+    #endif
+    #if file_exists( "$Root$/2052/clui.dll" )
+        .ExtraFiles + { '$Root$/2052/clui.dll'
+                        '$Root$/2052/mspft140ui.dll' } // Localized messages for static analysis
+    #endif
 
     #if ENABLE_LIGHT_CACHE
         .UseLightCache_Experimental = true
