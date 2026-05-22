@@ -7,6 +7,9 @@
 // FBuildWorker
 #include "Tools/FBuild/FBuildWorker/FBuildWorkerOptions.h"
 #include "Tools/FBuild/FBuildWorker/Worker/Worker.h"
+#if defined( __WINDOWS__ )
+    #include "Tools/FBuild/FBuildWorker/resource.h"
+#endif
 
 // Core
 #include "Core/Env/Assert.h"
@@ -23,6 +26,7 @@
 // system
 #if defined( __WINDOWS__ )
     #include "Core/Env/WindowsHeader.h"
+    #include <shellapi.h>
 #endif
 #if defined( __APPLE__ )
     #include <limits.h>
@@ -39,6 +43,7 @@ static SystemMutex g_OneProcessMutex( "Global\\FBuildWorker" );
 int Main( const AString & args );
 #if defined( __WINDOWS__ )
 int LaunchSubProcess( const AString & args );
+void ShowAlreadyRunningNotification();
 #endif
 
 //------------------------------------------------------------------------------
@@ -99,7 +104,11 @@ int Main( const AString & args )
         // retry for upto 2 seconds, to allow some time for old worker to close
         if ( t.GetElapsed() > 5.0f )
         {
+            #if defined( __WINDOWS__ )
+                ShowAlreadyRunningNotification();
+            #else
             Env::ShowMsgBox( "FBuildWorker", "An FBuildWorker is already running!" );
+            #endif
             return -1;
         }
         Thread::Sleep( 100 );
@@ -185,6 +194,79 @@ int LaunchSubProcess( const AString & args )
     p.Detach();
 
     return 0;
+}
+#endif
+
+// ShowAlreadyRunningNotification
+//------------------------------------------------------------------------------
+#if defined( __WINDOWS__ )
+LRESULT CALLBACK AlreadyRunningNotificationWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
+{
+    return ::DefWindowProc( hWnd, msg, wParam, lParam );
+}
+
+void ShowAlreadyRunningNotification()
+{
+    HINSTANCE hInstance = ::GetModuleHandle( nullptr );
+    const char * windowClassName = "FBuildWorkerAlreadyRunningNotification";
+
+    WNDCLASSEX windowClass;
+    ZeroMemory( &windowClass, sizeof( windowClass ) );
+    windowClass.cbSize = sizeof( windowClass );
+    windowClass.lpfnWndProc = AlreadyRunningNotificationWndProc;
+    windowClass.hInstance = hInstance;
+    windowClass.lpszClassName = windowClassName;
+
+    if ( ( ::RegisterClassEx( &windowClass ) == 0 ) && ( ::GetLastError() != ERROR_CLASS_ALREADY_EXISTS ) )
+    {
+        return;
+    }
+
+    HWND hWnd = ::CreateWindowEx( 0,
+                                  windowClassName,
+                                  "FBuildWorker",
+                                  0,
+                                  0,
+                                  0,
+                                  0,
+                                  0,
+                                  nullptr,
+                                  nullptr,
+                                  hInstance,
+                                  nullptr );
+    if ( hWnd == nullptr )
+    {
+        return;
+    }
+
+    NOTIFYICONDATA notifyIconData;
+    ZeroMemory( &notifyIconData, sizeof( notifyIconData ) );
+    notifyIconData.cbSize = sizeof( notifyIconData );
+    notifyIconData.hWnd = hWnd;
+    notifyIconData.uID = 5001;
+    notifyIconData.uFlags = NIF_ICON | NIF_TIP;
+    notifyIconData.hIcon = (HICON)::LoadIcon( hInstance, MAKEINTRESOURCE( IDI_TRAY_ICON ) );
+    if ( notifyIconData.hIcon == nullptr )
+    {
+        notifyIconData.hIcon = (HICON)::LoadIcon( nullptr, IDI_APPLICATION );
+    }
+    strncpy_s( notifyIconData.szTip, sizeof( notifyIconData.szTip ), "FBuildWorker", _TRUNCATE );
+
+    if ( ::Shell_NotifyIcon( NIM_ADD, &notifyIconData ) )
+    {
+        notifyIconData.uFlags = NIF_INFO;
+        notifyIconData.uTimeout = 3000;
+        notifyIconData.dwInfoFlags = NIIF_INFO;
+        strncpy_s( notifyIconData.szInfoTitle, sizeof( notifyIconData.szInfoTitle ), "FBuildWorker", _TRUNCATE );
+        strncpy_s( notifyIconData.szInfo, sizeof( notifyIconData.szInfo ), "An FBuildWorker is already running!", _TRUNCATE );
+
+        ::Shell_NotifyIcon( NIM_MODIFY, &notifyIconData );
+        Thread::Sleep( 3000 );
+        ::Shell_NotifyIcon( NIM_DELETE, &notifyIconData );
+    }
+
+    ::DestroyWindow( hWnd );
+    ::UnregisterClass( windowClassName, hInstance );
 }
 #endif
 
