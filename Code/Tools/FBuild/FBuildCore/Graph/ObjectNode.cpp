@@ -1911,6 +1911,15 @@ bool ObjectNode::BuildArgs( const Job * job, Args & fullArgs, Pass pass, bool us
         fullArgs += " /showIncludes"; // we'll extract dependency information from this
     }
 
+    // Clang/GCC response-file parsing treats backslashes as escapes. When
+    // compiling on Windows, preserve generated paths such as C:\foo\bar.cpp.
+#if defined( __WINDOWS__ )
+    if ( IsClang() || IsGCC() )
+    {
+        fullArgs.SetEscapeSlashesInResponseFile();
+    }
+#endif
+
     // Skip finalization?
     if ( finalize == false )
     {
