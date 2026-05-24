@@ -10,6 +10,7 @@
 *.user
 fbuild-linux
 tmp/
+tmp-UE5/
 ftmp/
 bin/
 profile.json

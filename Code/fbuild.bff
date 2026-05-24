@@ -327,10 +327,10 @@ Settings
 //------------------------------------------------------------------------------
 //
 //------------------------------------------------------------------------------
-.OutputBase = '../tmp'
+.OutputBase = '../tmp-UE5'
 #if BUILDING_FROM_TESTS
     // FASTBuild builds itself as part of its tests, so we need a unique output path
-    .OutputBase = '../tmp/Test/BuildFBuild'
+    .OutputBase = '../tmp-UE5/Test/BuildFBuild'
 #endif
 
 //------------------------------------------------------------------------------
