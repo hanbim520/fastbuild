@@ -106,6 +106,7 @@ public:
     static void OnBuildError();
     static bool GetStopBuild();
     static Atomic<bool> * GetAbortBuildPointer() { return &s_AbortBuild; }
+    void OnMonitorProgressJobCompleted( const Node * node );
 
     ICache * GetCache() const { return m_Cache; }
 
@@ -149,6 +150,7 @@ protected:
     float m_SmoothedProgressTarget;
     uint32_t m_MonitorProgressTotalJobs;
     uint32_t m_MonitorProgressRemainingJobs;
+    uint32_t m_MonitorProgressCompletedJobs;
 
     FBuildStats m_BuildStats;
 

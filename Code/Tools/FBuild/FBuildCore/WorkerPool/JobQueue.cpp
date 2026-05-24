@@ -720,6 +720,11 @@ void JobQueue::FinalizeCompletedJobs( NodeGraph & nodeGraph )
                 n->SetState( Node::FAILED );
             }
 
+            if ( FBuild::IsValid() )
+            {
+                FBuild::Get().OnMonitorProgressJobCompleted( n );
+            }
+
             // Free normal jobs
             if ( job->GetDistributionState() == Job::DIST_NONE )
             {

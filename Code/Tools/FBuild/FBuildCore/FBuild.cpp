@@ -68,6 +68,7 @@ FBuild::FBuild( const FBuildOptions & options )
     , m_SmoothedProgressTarget( 0.0f )
     , m_MonitorProgressTotalJobs( 0 )
     , m_MonitorProgressRemainingJobs( 0 )
+    , m_MonitorProgressCompletedJobs( 0 )
     , m_Options( options )
     , m_EnvironmentString( nullptr )
     , m_EnvironmentStringSize( 0 )
@@ -439,6 +440,7 @@ void FBuild::SaveDependencyGraph( ChainedMemoryStream & stream, const char * nod
     m_SmoothedProgressTarget = 0.0f;
     m_MonitorProgressTotalJobs = 0;
     m_MonitorProgressRemainingJobs = 0;
+    m_MonitorProgressCompletedJobs = 0;
     FLog::StartBuild();
 
     // create worker dir for main thread build case
@@ -714,12 +716,15 @@ void FBuild::UpdateBuildStatus( const Node * node )
         if ( m_MonitorProgressTotalJobs == 0 )
         {
             m_MonitorProgressTotalJobs = remainingJobs;
-            m_MonitorProgressRemainingJobs = remainingJobs;
         }
-        else
-        {
-            m_MonitorProgressRemainingJobs = Math::Min( remainingJobs, m_MonitorProgressRemainingJobs );
-        }
+    }
+
+    if ( m_MonitorProgressTotalJobs > 0 )
+    {
+        m_MonitorProgressRemainingJobs =
+            ( m_MonitorProgressCompletedJobs < m_MonitorProgressTotalJobs )
+                ? ( m_MonitorProgressTotalJobs - m_MonitorProgressCompletedJobs )
+                : 0;
     }
 
     const bool doUpdate = ( ( timeNow - m_LastProgressOutputTime ) >= OUTPUT_FREQUENCY );
@@ -762,6 +767,43 @@ void FBuild::UpdateBuildStatus( const Node * node )
                   m_MonitorProgressRemainingJobs );
 
     m_LastProgressOutputTime = timeNow;
+}
+
+// IsMonitorProgressNode
+//------------------------------------------------------------------------------
+static bool IsMonitorProgressNode( const Node * node )
+{
+    if ( node == nullptr )
+    {
+        return false;
+    }
+
+    switch ( node->GetType() )
+    {
+        case Node::OBJECT_NODE:
+        case Node::EXE_NODE:
+        case Node::LIBRARY_NODE:
+        case Node::DLL_NODE:
+        case Node::CS_NODE:
+        case Node::EXEC_NODE:
+        case Node::TEST_NODE:
+            return true;
+        default:
+            return false;
+    }
+}
+
+// OnMonitorProgressJobCompleted
+//------------------------------------------------------------------------------
+void FBuild::OnMonitorProgressJobCompleted( const Node * node )
+{
+    if ( ( m_MonitorProgressTotalJobs > 0 ) && FLog::IsMonitorEnabled() && IsMonitorProgressNode( node ) )
+    {
+        if ( m_MonitorProgressCompletedJobs < m_MonitorProgressTotalJobs )
+        {
+            ++m_MonitorProgressCompletedJobs;
+        }
+    }
 }
 
 // GetDefaultBFFFileName
