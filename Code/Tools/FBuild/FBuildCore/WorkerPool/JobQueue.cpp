@@ -148,6 +148,7 @@ Job * JobSubQueue::RemoveJob()
 //------------------------------------------------------------------------------
 JobQueue::JobQueue( uint32_t numWorkerThreads, ThreadPool * threadPool )
     : m_NumLocalJobsActive( 0 )
+    , m_NumDistributableJobsAvailable( 0 )
 #if defined( __WINDOWS__ )
     , m_MainThreadSemaphore( 1 ) // On Windows, take advantage of signalling limit
 #else
@@ -217,6 +218,7 @@ JobQueue::~JobQueue()
             FDELETE m_DistributableJobs_Available[ i ];
         }
         m_DistributableJobs_Available.Clear();
+        m_NumDistributableJobsAvailable.Store( 0 );
     }
 
     ASSERT( m_CompletedJobs.IsEmpty() );
@@ -258,8 +260,7 @@ bool JobQueue::HaveWorkersStopped() const
 //------------------------------------------------------------------------------
 size_t JobQueue::GetNumDistributableJobsAvailable() const
 {
-    MutexHolder m( m_DistributedJobsMutex );
-    return m_DistributableJobs_Available.GetSize();
+    return static_cast<size_t>( m_NumDistributableJobsAvailable.Load() );
 }
 
 // GetJobStats
@@ -279,11 +280,12 @@ void JobQueue::GetJobStats( uint32_t & numJobs,
         numPendingJobs += static_cast<uint32_t>( groupState.m_LocalJobs_Staging.GetSize() );
     }
 
-    MutexHolder m( m_DistributedJobsMutex );
-
     numJobs = m_LocalJobs_Available.GetCount() + numPendingJobs;
-    numJobsDist = (uint32_t)m_DistributableJobs_Available.GetSize();
     numJobsActive = AtomicLoadRelaxed( &m_NumLocalJobsActive );
+
+    MutexHolder m( m_DistributedJobsMutex );
+    numJobsDist = (uint32_t)m_DistributableJobs_Available.GetSize();
+    ASSERT( numJobsDist == m_NumDistributableJobsAvailable.Load() );
     numJobsDistActive = (uint32_t)m_DistributableJobs_InProgress.GetSize();
 }
 
@@ -415,6 +417,7 @@ void JobQueue::QueueDistributableJob( Job * job )
         MutexHolder m( m_DistributedJobsMutex );
 
         m_DistributableJobs_Available.Append( job );
+        m_NumDistributableJobsAvailable.Increment();
 
         // Jobs that have been preprocessed and are ready to be distributed are
         // added here. The order of completion of preprocessing doesn't correlate
@@ -456,6 +459,7 @@ Job * JobQueue::GetDistributableJobToProcess( bool remote, uint8_t workerMinorPr
         // from the end of the list.
         job = m_DistributableJobs_Available.Top();
         m_DistributableJobs_Available.Pop();
+        VERIFY( m_NumDistributableJobsAvailable.Decrement() != static_cast<uint32_t>( -1 ) );
     }
     else
     {
@@ -480,6 +484,7 @@ Job * JobQueue::GetDistributableJobToProcess( bool remote, uint8_t workerMinorPr
 
             job = potentialJob;
             m_DistributableJobs_Available.EraseIndex( static_cast<size_t>( i ) );
+            VERIFY( m_NumDistributableJobsAvailable.Decrement() != static_cast<uint32_t>( -1 ) );
             break;
         }
 
@@ -664,6 +669,7 @@ void JobQueue::ReturnUnfinishedDistributableJob( Job * job )
 
             // Put back in available queue
             m_DistributableJobs_Available.Append( job );
+            m_NumDistributableJobsAvailable.Increment();
             job->SetDistributionState( Job::DIST_AVAILABLE );
         }
     }

@@ -11,6 +11,7 @@
 #include "Core/Containers/Array.h"
 #include "Core/Containers/Singleton.h"
 
+#include "Core/Process/Atomic.h"
 #include "Core/Process/Mutex.h"
 #include "Core/Process/Semaphore.h"
 
@@ -115,6 +116,7 @@ private:
 
     // Jobs available for distributed processing (can also be done locally)
     mutable Mutex m_DistributedJobsMutex;
+    Atomic<uint32_t> m_NumDistributableJobsAvailable;
     Array<Job *> m_DistributableJobs_Available; // Available, not in progress anywhere
     Array<Job *> m_DistributableJobs_InProgress; // In progress remotely, locally or both
 
